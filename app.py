@@ -51,7 +51,7 @@ def to_pdf(summary, report_data, unknown_info):
     return pdf_bytes.read()
 
 def main():
-    st.title("TB Data Analysis Dashboard")
+    st.title("VMTB Data Analysis Dashboard - Uttar Pradesh")
 
     st.markdown("Upload the two Excel files:")
     file1 = st.file_uploader("Upload VMTB Village List Excel", type=["xlsx"])
