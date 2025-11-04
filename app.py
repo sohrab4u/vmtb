@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+import matplotlib
+matplotlib.use('Agg')  # Non-GUI backend for matplotlib on Streamlit Cloud
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import plotly.express as px
