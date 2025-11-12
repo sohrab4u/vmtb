@@ -102,7 +102,7 @@ def plot_pie(labels, sizes, title, colors=None):
 
 def main():
     st.set_page_config(layout="wide")
-    st.title("TB Village Matching and Analytics Dashboard")
+    st.title("VMTB Data Analytics Dashboard")
 
     uploaded_file1 = st.file_uploader("Upload First Excel File (Detailed TB Data)", type=['xlsx'])
     uploaded_file2 = st.file_uploader("Upload Second Excel File (Village List)", type=['xlsx'])
