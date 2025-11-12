@@ -5,3 +5,4 @@ plotly
 numpy
 xlsxwriter
 openpyxl
+fpdf
