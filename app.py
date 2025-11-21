@@ -38,7 +38,6 @@ def generate_report(df1, df2):
     except IndexError as e:
         raise KeyError("Could not find TB Unit or Gram Panchayat columns. Found: " + str(cols1)) from e
 
-    # All summary columns must exist
     for label, col in SUMMARY_COLS.items():
         if col not in cols1:
             raise KeyError(f"Column for {label} not found. Expected: '{col}'.\nFound columns: {cols1}")
@@ -76,11 +75,10 @@ def generate_report(df1, df2):
             return 'Not Matched'
     df1['Match Status'] = df1.apply(match_status, axis=1)
 
-    matched_df   = df1[df1['Match Status'] == 'Matched'].copy()
+    matched_df = df1[df1['Match Status'] == 'Matched'].copy()
     unmatched_df = df1[df1['Match Status'] == 'Not Matched'].copy()
-    missing_df   = df1[df1['Match Status'] == 'Missing Village Name'].copy()
+    missing_df = df1[df1['Match Status'] == 'Missing Village Name'].copy()
 
-    # Convert all columns of interest to numeric
     for df in [matched_df, unmatched_df, missing_df]:
         for col in SUMMARY_COLS.values():
             if col in df.columns:
@@ -89,7 +87,6 @@ def generate_report(df1, df2):
     total_tb_units = df1[tb_unit_col].astype(str).str.strip().nunique()
     matched_village_tb_unit_wise = matched_df.groupby(tb_unit_col)[village_col_1].count().to_dict()
 
-    # Only summary calculations below!
     report = {
         'Total Village in TB Unit': total_villages,
         'Total Number of TB Units': total_tb_units,
@@ -116,17 +113,44 @@ def generate_report(df1, df2):
     return report, matched_df, unmatched_df, missing_df, tb_unit_col, export_cols
 
 def plot_pie(labels, sizes, title, colors=None):
-    fig, ax = plt.subplots(figsize=(6,6))
+    fig, ax = plt.subplots(figsize=(5,5))
     ax.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, startangle=140, shadow=True, textprops={'fontsize': 12})
     ax.axis('equal')
     plt.title(title)
     st.pyplot(fig)
 
+def recalc_filtered_report(filtered_matched, filtered_unmatched, filtered_missing, matched_village_tb_unit_wise, duplicates):
+    return {
+        'Total Village in TB Unit': len(filtered_matched) + len(filtered_unmatched) + len(filtered_missing),
+        'Total Number of TB Units': len(filtered_matched['Match Status'].unique().tolist() + filtered_unmatched['Match Status'].unique().tolist() + filtered_missing['Match Status'].unique().tolist()),
+        'Total Matched Village': len(filtered_matched),
+        'Total Not Matched Village': len(filtered_unmatched),
+        'Total Missing Village Name': len(filtered_missing),
+        f"{SUMMARY_COLS['Population']} - Matched": filtered_matched[SUMMARY_COLS['Population']].sum(),
+        f"{SUMMARY_COLS['Population']} - Not Matched": filtered_unmatched[SUMMARY_COLS['Population']].sum(),
+        f"{SUMMARY_COLS['Presumptive']} - Matched": filtered_matched[SUMMARY_COLS['Presumptive']].sum(),
+        f"{SUMMARY_COLS['Presumptive']} - Not Matched": filtered_unmatched[SUMMARY_COLS['Presumptive']].sum(),
+        f"{SUMMARY_COLS['Diagnosed']} - Matched": filtered_matched[SUMMARY_COLS['Diagnosed']].sum(),
+        f"{SUMMARY_COLS['Diagnosed']} - Not Matched": filtered_unmatched[SUMMARY_COLS['Diagnosed']].sum(),
+        f"{SUMMARY_COLS['UDST']} - Matched": filtered_matched[SUMMARY_COLS['UDST']].sum(),
+        f"{SUMMARY_COLS['UDST']} - Not Matched": filtered_unmatched[SUMMARY_COLS['UDST']].sum(),
+        f"{SUMMARY_COLS['NPY_DBT']} - Matched": filtered_matched[SUMMARY_COLS['NPY_DBT']].sum(),
+        f"{SUMMARY_COLS['NPY_DBT']} - Not Matched": filtered_unmatched[SUMMARY_COLS['NPY_DBT']].sum(),
+        f"{SUMMARY_COLS['Poshan']} - Matched": filtered_matched[SUMMARY_COLS['Poshan']].sum(),
+        f"{SUMMARY_COLS['Poshan']} - Not Matched": filtered_unmatched[SUMMARY_COLS['Poshan']].sum(),
+        'Matched Village TB Unit wise': matched_village_tb_unit_wise,
+        'Duplicate Villages in Detailed TB Data': duplicates
+    }
+
 def main():
     st.set_page_config(layout="wide")
     st.title("TB Village Matching and Analytics Dashboard")
-    uploaded_file1 = st.file_uploader("Upload First Excel or CSV File (Detailed TB Data)", type=["xlsx", "csv"])
-    uploaded_file2 = st.file_uploader("Upload Second Excel or CSV File (Village List)", type=["xlsx", "csv"])
+
+    up_col1, up_col2 = st.columns(2)
+    with up_col1:
+        uploaded_file1 = st.file_uploader("Upload Detailed TB Data (Excel/CSV)", type=["xlsx", "csv"], key="file1")
+    with up_col2:
+        uploaded_file2 = st.file_uploader("Upload Village List (Excel/CSV)", type=["xlsx", "csv"], key="file2")
 
     df1 = read_any_file(uploaded_file1) if uploaded_file1 is not None else None
     df2 = read_any_file(uploaded_file2) if uploaded_file2 is not None else None
@@ -143,48 +167,7 @@ def main():
         all_tb_units = ["All"] + sorted(df1[tb_unit_col].astype(str).str.strip().unique())
         selected_tb_unit = st.sidebar.selectbox("Select TB Unit", all_tb_units)
 
-        # Pie chart colors: green (Matched), red (Not Matched), yellow (Missing)
-        match_color = '#4CAF50'
-        nomatch_color = '#F44336'
-        missing_color = '#FFC107'
-
-        st.header("Summary Statistics Pie Charts")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Village Counts")
-            labels = ["Matched", "Not Matched", "Missing"]
-            sizes = [
-                report["Total Matched Village"],
-                report["Total Not Matched Village"],
-                report["Total Missing Village Name"]
-            ]
-            colors = [match_color, nomatch_color, missing_color]
-            plot_pie(labels, sizes, "Village Counts Distribution", colors)
-
-            st.subheader("Population Summary")
-            labels = ["Matched", "Not Matched"]
-            pop_matched = report[f"{SUMMARY_COLS['Population']} - Matched"]
-            pop_unmatched = report[f"{SUMMARY_COLS['Population']} - Not Matched"]
-            sizes = [pop_matched, pop_unmatched]
-            colors = [match_color, nomatch_color]
-            plot_pie(labels, sizes, "Population Distribution", colors)
-        with col2:
-            st.subheader("Presumptive TB Tests Summary")
-            labels = ["Matched", "Not Matched"]
-            pres_matched = report[f"{SUMMARY_COLS['Presumptive']} - Matched"]
-            pres_unmatched = report[f"{SUMMARY_COLS['Presumptive']} - Not Matched"]
-            sizes = [pres_matched, pres_unmatched]
-            colors = [match_color, nomatch_color]
-            plot_pie(labels, sizes, "Presumptive TB Tests", colors)
-
-            st.subheader("Patients Diagnosed Summary")
-            labels = ["Matched", "Not Matched"]
-            diag_matched = report[f"{SUMMARY_COLS['Diagnosed']} - Matched"]
-            diag_unmatched = report[f"{SUMMARY_COLS['Diagnosed']} - Not Matched"]
-            sizes = [diag_matched, diag_unmatched]
-            colors = [match_color, nomatch_color]
-            plot_pie(labels, sizes, "Patients Diagnosed", colors)
-
+        # Data filtering (same as already present)
         if selected_tb_unit != "All":
             filtered_matched = matched_df[matched_df[tb_unit_col] == selected_tb_unit]
             filtered_unmatched = unmatched_df[unmatched_df[tb_unit_col] == selected_tb_unit]
@@ -194,6 +177,47 @@ def main():
             filtered_unmatched = unmatched_df
             filtered_missing = missing_df
 
+        match_color = '#4CAF50'
+        nomatch_color = '#F44336'
+        missing_color = '#FFC107'
+
+        st.header("Summary Statistics Pie Charts")
+        pie_cols = st.columns(4)
+        
+        with pie_cols[0]:
+            labels = ["Matched", "Not Matched", "Missing"]
+            sizes = [
+                len(filtered_matched),
+                len(filtered_unmatched),
+                len(filtered_missing)
+            ]
+            colors = [match_color, nomatch_color, missing_color]
+            plot_pie(labels, sizes, "Village Counts", colors)
+
+        with pie_cols[1]:
+            labels = ["Matched", "Not Matched"]
+            pop_matched = filtered_matched[SUMMARY_COLS['Population']].sum()
+            pop_unmatched = filtered_unmatched[SUMMARY_COLS['Population']].sum()
+            sizes = [pop_matched, pop_unmatched]
+            colors = [match_color, nomatch_color]
+            plot_pie(labels, sizes, "Population", colors)
+
+        with pie_cols[2]:
+            labels = ["Matched", "Not Matched"]
+            pres_matched = filtered_matched[SUMMARY_COLS['Presumptive']].sum()
+            pres_unmatched = filtered_unmatched[SUMMARY_COLS['Presumptive']].sum()
+            sizes = [pres_matched, pres_unmatched]
+            colors = [match_color, nomatch_color]
+            plot_pie(labels, sizes, "Presumptive TB Tests", colors)
+
+        with pie_cols[3]:
+            labels = ["Matched", "Not Matched"]
+            diag_matched = filtered_matched[SUMMARY_COLS['Diagnosed']].sum()
+            diag_unmatched = filtered_unmatched[SUMMARY_COLS['Diagnosed']].sum()
+            sizes = [diag_matched, diag_unmatched]
+            colors = [match_color, nomatch_color]
+            plot_pie(labels, sizes, "Patients Diagnosed", colors)
+
         st.header(f"Matched Villages Detail - {selected_tb_unit}")
         st.dataframe(filtered_matched)
         st.header(f"Not Matched Villages Detail - {selected_tb_unit}")
@@ -201,8 +225,14 @@ def main():
         st.header(f"Missing Village Name Detail - {selected_tb_unit}")
         st.dataframe(filtered_missing)
 
+        # --- DYNAMIC SUMMARY REPORT: recalc on the filtered data ---
+        filtered_report = recalc_filtered_report(
+            filtered_matched, filtered_unmatched, filtered_missing,
+            report["Matched Village TB Unit wise"], report["Duplicate Villages in Detailed TB Data"]
+        )
+
         st.header("Summary Report Details")
-        for title, content in report.items():
+        for title, content in filtered_report.items():
             if isinstance(content, dict):
                 st.markdown(f"**{title}:**")
                 for key, val in content.items():
