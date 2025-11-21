@@ -144,7 +144,7 @@ def recalc_filtered_report(filtered_matched, filtered_unmatched, filtered_missin
 
 def main():
     st.set_page_config(layout="wide")
-    st.title("TB Village Matching and Analytics Dashboard")
+    st.title("VMTB Village Matching and Analytics Dashboard - Uttar Pradesh")
 
     up_col1, up_col2 = st.columns(2)
     with up_col1:
