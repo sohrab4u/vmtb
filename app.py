@@ -106,7 +106,8 @@ def generate_report(df1, df2):
         f"{SUMMARY_COLS['Poshan']} - Matched": matched_df[SUMMARY_COLS['Poshan']].sum(),
         f"{SUMMARY_COLS['Poshan']} - Not Matched": unmatched_df[SUMMARY_COLS['Poshan']].sum(),
         'Matched Village TB Unit wise': matched_village_tb_unit_wise,
-        'Duplicate Villages in Detailed TB Data': duplicates
+        'Duplicate Villages in Detailed TB Data': duplicates,
+        'tb_unit_col': tb_unit_col  # Pass for downstream use
     }
 
     export_cols = [tb_unit_col, village_col_1] + list(SUMMARY_COLS.values()) + ['Match Status']
@@ -119,10 +120,12 @@ def plot_pie(labels, sizes, title, colors=None):
     plt.title(title)
     st.pyplot(fig)
 
-def recalc_filtered_report(filtered_matched, filtered_unmatched, filtered_missing, matched_village_tb_unit_wise, duplicates):
+def recalc_filtered_report(filtered_matched, filtered_unmatched, filtered_missing, matched_village_tb_unit_wise, duplicates, tb_unit_col):
+    # Combine all filtered dataframes to get unique TB Units in the filtered scope
+    tb_units = pd.concat([filtered_matched, filtered_unmatched, filtered_missing])[tb_unit_col].dropna().unique()
     return {
         'Total Village in TB Unit': len(filtered_matched) + len(filtered_unmatched) + len(filtered_missing),
-        'Total Number of TB Units': len(filtered_matched['Match Status'].unique().tolist() + filtered_unmatched['Match Status'].unique().tolist() + filtered_missing['Match Status'].unique().tolist()),
+        'Total Number of TB Units': len(tb_units),
         'Total Matched Village': len(filtered_matched),
         'Total Not Matched Village': len(filtered_unmatched),
         'Total Missing Village Name': len(filtered_missing),
@@ -144,7 +147,7 @@ def recalc_filtered_report(filtered_matched, filtered_unmatched, filtered_missin
 
 def main():
     st.set_page_config(layout="wide")
-    st.title("VMTB Village Matching and Analytics Dashboard - Uttar Pradesh")
+    st.title("VMTB Data Analytics Dashboard - Uttar Pradesh")
 
     up_col1, up_col2 = st.columns(2)
     with up_col1:
@@ -167,7 +170,6 @@ def main():
         all_tb_units = ["All"] + sorted(df1[tb_unit_col].astype(str).str.strip().unique())
         selected_tb_unit = st.sidebar.selectbox("Select TB Unit", all_tb_units)
 
-        # Data filtering (same as already present)
         if selected_tb_unit != "All":
             filtered_matched = matched_df[matched_df[tb_unit_col] == selected_tb_unit]
             filtered_unmatched = unmatched_df[unmatched_df[tb_unit_col] == selected_tb_unit]
@@ -183,7 +185,6 @@ def main():
 
         st.header("Summary Statistics Pie Charts")
         pie_cols = st.columns(4)
-        
         with pie_cols[0]:
             labels = ["Matched", "Not Matched", "Missing"]
             sizes = [
@@ -193,7 +194,6 @@ def main():
             ]
             colors = [match_color, nomatch_color, missing_color]
             plot_pie(labels, sizes, "Village Counts", colors)
-
         with pie_cols[1]:
             labels = ["Matched", "Not Matched"]
             pop_matched = filtered_matched[SUMMARY_COLS['Population']].sum()
@@ -201,7 +201,6 @@ def main():
             sizes = [pop_matched, pop_unmatched]
             colors = [match_color, nomatch_color]
             plot_pie(labels, sizes, "Population", colors)
-
         with pie_cols[2]:
             labels = ["Matched", "Not Matched"]
             pres_matched = filtered_matched[SUMMARY_COLS['Presumptive']].sum()
@@ -209,7 +208,6 @@ def main():
             sizes = [pres_matched, pres_unmatched]
             colors = [match_color, nomatch_color]
             plot_pie(labels, sizes, "Presumptive TB Tests", colors)
-
         with pie_cols[3]:
             labels = ["Matched", "Not Matched"]
             diag_matched = filtered_matched[SUMMARY_COLS['Diagnosed']].sum()
@@ -225,10 +223,9 @@ def main():
         st.header(f"Missing Village Name Detail - {selected_tb_unit}")
         st.dataframe(filtered_missing)
 
-        # --- DYNAMIC SUMMARY REPORT: recalc on the filtered data ---
         filtered_report = recalc_filtered_report(
             filtered_matched, filtered_unmatched, filtered_missing,
-            report["Matched Village TB Unit wise"], report["Duplicate Villages in Detailed TB Data"]
+            report["Matched Village TB Unit wise"], report["Duplicate Villages in Detailed TB Data"], report["tb_unit_col"]
         )
 
         st.header("Summary Report Details")
